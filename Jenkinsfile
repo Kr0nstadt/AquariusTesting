@@ -4,25 +4,20 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git 'https://github.com/Kr0nstadt/AquariusTesting.git'
+                git branch: 'main', 
+                    url: 'https://github.com/Kr0nstadt/AquariusTesting.git'
             }
         }
         
         stage('Install Dependencies') {
             steps {
-                sh '''
-                    echo "Устанавливаем зависимости..."
-                    pip3 install locust
-                '''
+                sh 'pip3 install locust'
             }
         }
         
         stage('Load Testing') {
             steps {
-                sh '''
-                    echo "Запускаем нагрузочное тестирование Locust..."
-                    locust --headless -u 10 -r 2 --run-time 1m --host=https://jsonplaceholder.typicode.com -f locustfile.py
-                '''
+                sh 'locust --headless -u 5 -r 1 --run-time 30s --host=https://jsonplaceholder.typicode.com -f locustfile.py'
             }
         }
     }
