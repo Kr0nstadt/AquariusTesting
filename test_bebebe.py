@@ -1,3 +1,5 @@
+import datetime
+import logging
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -14,6 +16,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 class OpenBMCTest(unittest.TestCase):
 
     def setUp(self):
+        logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+        self.logger = logging.getLogger(self.__class__.__name__)
         
         firefox_options = Options()
 
@@ -39,7 +48,7 @@ class OpenBMCTest(unittest.TestCase):
 
        
         if not os.path.exists(geckodriver_path):
-            print(f"ОШИБКА: Файл {geckodriver_path} не найден!")
+            self.logger.error(f"Файл {geckodriver_path} не найден!")
             raise FileNotFoundError(f"GeckoDriver не найден по пути: {geckodriver_path}")
         
         #сервис для управления драйвером
@@ -49,18 +58,19 @@ class OpenBMCTest(unittest.TestCase):
             self.driver = webdriver.Firefox(service=service, options=firefox_options)
             #обект браузера
         except Exception as e:
-            print(f"Ошибка при запуске Firefox: {e}")
+            self.logger.error(f"Ошибка при запуске Firefox: {e}")
             raise
         
         self.driver.implicitly_wait(20)
         self.base_url = "https://localhost:2443"
         self.wait = WebDriverWait(self.driver, 30)
-        
+        self.logger.info(f"Браузер запущен: {datetime.datetime.now().time()}, URL: {self.base_url}")
         self.driver.set_window_size(1200, 800)
 
     def tearDown(self):
         if hasattr(self, 'driver') and self.driver:
             self.driver.quit()
+            self.logger.info("Браузер закрыт")
 
 
     def accept_ssl_certificate(self):
@@ -76,8 +86,9 @@ class OpenBMCTest(unittest.TestCase):
             )
             accept_button.click()
             time.sleep(3)
+            self.logger.info("SSL сертификат принят")
         except Exception as e:
-            print(f"SSL предупреждение не появилось : {e}")
+            self.logger.info(f"SSL предупреждение не появилось: {e}")
 
     def login(self, username, password):
         self.driver.get(self.base_url)
@@ -95,28 +106,31 @@ class OpenBMCTest(unittest.TestCase):
             password_field.send_keys(password)
             
             password_field.send_keys(Keys.RETURN)
-            
+            self.logger.info(f"Попытка входа пользователя: {username}")
             
         except Exception as e:
-            print(f"Ошибка при вводе логина: {e}")
-            
+            self.logger.error(f"Ошибка при вводе логина: {e}")
             raise
             
         time.sleep(5)
         
 
     def test_1_successful_login(self):
-
+        self.logger.info("Запуск теста: Успешный вход")
         self.login("root", "0penBmc")
-        self.assertNotEqual(self.driver.current_url, '{self.base_url}/#/login')
+        self.assertNotEqual(self.driver.current_url, f'{self.base_url}/#/login')
+        self.logger.info("Тест успешного входа пройден")
     
     def test_2_fyfyfy_login(self):
-       self.login("root", "fyfyfy")
-       #time.sleep(10)
-       #юрл специально такой стремненький, не первая попытка войти
-       self.assertEqual(self.driver.current_url, 'https://localhost:2443/?next=/login#/login')
+        self.logger.info("Запуск теста: Неуспешный вход с неверным паролем")
+        self.login("root", "fyfyfy")
+        #time.sleep(10)
+        #юрл специально такой стремненький, не первая попытка войти
+        self.assertEqual(self.driver.current_url, 'https://localhost:2443/?next=/login#/login')
+        self.logger.info("Тест неуспешного входа пройден")
 
     def test_3_out_session(self):
+        self.logger.info("Запуск теста: Выход из сессии")
         self.login("root", "0penBmc")
         try:
             user_dropdown_button = self.wait.until(
@@ -130,14 +144,16 @@ class OpenBMCTest(unittest.TestCase):
             logout_button.click()
             time.sleep(3)
             current_url = self.driver.current_url
-            print(current_url)
+            self.logger.info(f"Текущий URL после выхода: {current_url}")
             self.assertEqual(current_url, 'https://localhost:2443/#/login')
+            self.logger.info("Тест выхода из сессии пройден")
             
         except Exception as e:
-            print(f"Ошибка при открытии списка: {e}")
+            self.logger.error(f"Ошибка при выходе из сессии: {e}")
             raise
 
     def test_4_power_status(self):
+        self.logger.info("Запуск теста: Проверка статуса питания")
         self.login("root", "0penBmc")
         try:
             link_power = self.wait.until(
@@ -149,13 +165,16 @@ class OpenBMCTest(unittest.TestCase):
             EC.presence_of_element_located((By.CSS_SELECTOR, "[data-test-id='powerServerOps-text-hostStatus']"))
             )
             server_status = server_status_element.text
+            self.logger.info(f"Статус сервера: {server_status}")
             self.assertEqual(server_status, "Off")
+            self.logger.info("Тест проверки статуса питания пройден")
             
         except Exception as e:
-            print(f"Ошибка при поиске статуса сервиса {e}")
+            self.logger.error(f"Ошибка при поиске статуса сервера: {e}")
             raise
 
     def test_5_status_kvm(self):
+        self.logger.info("Запуск теста: Проверка статуса KVM")
         self.login("root", "0penBmc")
         try:
             aside_button = self.wait.until(
@@ -172,10 +191,12 @@ class OpenBMCTest(unittest.TestCase):
             EC.presence_of_element_located((By.CSS_SELECTOR, "span[class='d-none d-md-inline']"))
             )
             server_status = kvm_status_element.text
+            self.logger.info(f"Статус KVM: {server_status}")
             self.assertEqual(server_status, "Disconnected")
+            self.logger.info("Тест проверки статуса KVM пройден")
             
         except Exception as e:
-            print(f"Ошибка при поиске статуса сервиса {e}")
+            self.logger.error(f"Ошибка при поиске статуса KVM: {e}")
             raise
 
 if __name__ == "__main__":
