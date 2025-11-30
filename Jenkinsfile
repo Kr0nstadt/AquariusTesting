@@ -9,14 +9,12 @@ pipeline {
             }
         }
         
-        stage('Start QEMU OpenBMC') {
+        stage('Check BMC Status') {
             steps {
                 sh '''
-                    cd romulus
-                    qemu-system-arm -m 256 -M romulus-bmc -nographic -drive file=obmc-phosphor-image-romulus-20250902012112.static.mtd,format=raw,if=mtd -net nic -net user,hostfwd=:0.0.0.0:2222-:22,hostfwd=:0.0.0.0:2443-:443,hostfwd=udp:0.0.0.0:2623-:623 &
-                    echo $! > /tmp/qemu_pid.txt
-                    sleep 90
-                    curl -k https://localhost:2443/redfish/v1/ > qemu_start.log 2>&1 || echo "QEMU starting..." > qemu_start.log
+                    curl -k https://localhost:2443/redfish/v1/ > bmc_status.log 2>&1
+                    echo "=== BMC STATUS CHECK ===" >> bmc_status.log
+                    date >> bmc_status.log
                 '''
             }
         }
@@ -47,18 +45,6 @@ pipeline {
                     locust --headless -u 10 -r 1 --run-time 1m > load_test.log 2>&1
                     echo "=== LOAD TESTS COMPLETED ===" >> load_test.log
                     date >> load_test.log
-                '''
-            }
-        }
-        
-        stage('Cleanup') {
-            steps {
-                sh '''
-                    if [ -f /tmp/qemu_pid.txt ]; then
-                        kill $(cat /tmp/qemu_pid.txt) 2>/dev/null || true
-                        rm /tmp/qemu_pid.txt
-                        echo "QEMU stopped" > cleanup.log
-                    fi
                 '''
             }
         }
