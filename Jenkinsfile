@@ -9,17 +9,6 @@ pipeline {
             }
         }
         
-        stage('Setup Environment') {
-            steps {
-                sh '''
-                    which python3 || apt-get update && apt-get install -y python3 python3-venv
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install -r requirements.txt
-                '''
-            }
-        }
-        
         stage('Start QEMU OpenBMC') {
             steps {
                 sh '''
@@ -27,7 +16,7 @@ pipeline {
                     qemu-system-arm -m 256 -M romulus-bmc -nographic -drive file=obmc-phosphor-image-romulus-20250902012112.static.mtd,format=raw,if=mtd -net nic -net user,hostfwd=:0.0.0.0:2222-:22,hostfwd=:0.0.0.0:2443-:443,hostfwd=udp:0.0.0.0:2623-:623 &
                     echo $! > /tmp/qemu_pid.txt
                     sleep 90
-                    curl -k https://localhost:2443/redfish/v1/ > qemu_status.log 2>&1 || true
+                    curl -k https://localhost:2443/redfish/v1/ > qemu_start.log 2>&1 || echo "QEMU starting..." > qemu_start.log
                 '''
             }
         }
@@ -35,12 +24,9 @@ pipeline {
         stage('Run API Tests') {
             steps {
                 sh '''
-                    . venv/bin/activate
-                    python -m pytest lab_fish_bylbyl.py -v > api_test_output.log 2>&1
-                    echo "<html><body><h1>API Test Results</h1>" > api_report.html
-                    echo "<pre>" >> api_report.html
-                    cat api_test_output.log >> api_report.html
-                    echo "</pre></body></html>" >> api_report.html
+                    python -m pytest lab_fish_bylbyl.py -v > api_test.log 2>&1
+                    echo "=== API TESTS COMPLETED ===" >> api_test.log
+                    date >> api_test.log
                 '''
             }
         }
@@ -48,12 +34,9 @@ pipeline {
         stage('Run WebUI Tests') {
             steps {
                 sh '''
-                    . venv/bin/activate
-                    python -m pytest test_bebebe.py -v > webui_test_output.log 2>&1
-                    echo "<html><body><h1>WebUI Test Results</h1>" > webui_report.html
-                    echo "<pre>" >> webui_report.html
-                    cat webui_test_output.log >> webui_report.html
-                    echo "</pre></body></html>" >> webui_report.html
+                    python -m pytest test_bebebe.py -v > webui_test.log 2>&1
+                    echo "=== WEBUI TESTS COMPLETED ===" >> webui_test.log
+                    date >> webui_test.log
                 '''
             }
         }
@@ -61,12 +44,9 @@ pipeline {
         stage('Run Load Testing') {
             steps {
                 sh '''
-                    . venv/bin/activate
-                    python -m locust --headless -u 10 -r 1 --run-time 1m > load_test_output.log 2>&1 || true
-                    echo "<html><body><h1>Load Test Report</h1>" > load_test_report.html
-                    echo "<pre>" >> load_test_report.html
-                    cat load_test_output.log >> load_test_report.html
-                    echo "</pre></body></html>" >> load_test_report.html
+                    locust --headless -u 10 -r 1 --run-time 1m > load_test.log 2>&1
+                    echo "=== LOAD TESTS COMPLETED ===" >> load_test.log
+                    date >> load_test.log
                 '''
             }
         }
@@ -77,6 +57,7 @@ pipeline {
                     if [ -f /tmp/qemu_pid.txt ]; then
                         kill $(cat /tmp/qemu_pid.txt) 2>/dev/null || true
                         rm /tmp/qemu_pid.txt
+                        echo "QEMU stopped" > cleanup.log
                     fi
                 '''
             }
@@ -85,7 +66,7 @@ pipeline {
     
     post {
         always {
-            archiveArtifacts artifacts: '*.log, *.html, qemu_status.log', fingerprint: true
+            archiveArtifacts artifacts: '*.log, *.html, *.py', fingerprint: true
         }
     }
 }
